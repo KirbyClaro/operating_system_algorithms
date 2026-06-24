@@ -58,7 +58,97 @@ class RoundRobinSimulator:
         self.lbl_averages.pack(pady=10)
 
     def calculate_rr(self):
-        print("Round Robin logic will go here!")
+        try:
+            arrival_times = list(map(int, self.entry_arrival.get().split(',')))
+            burst_times = list(map(int, self.entry_burst.get().split(',')))
+            quantum = int(self.entry_quantum.get())
+            n = len(arrival_times)
+
+            if n != len(burst_times):
+                messagebox.showerror("Input Error", "Arrival Times and Burst Times count must match.")
+                return
+            if quantum <= 0:
+                messagebox.showerror("Input Error", "Time Quantum must be greater than 0.")
+                return
+
+            # Setup data structure
+            processes = []
+            for i in range(n):
+                processes.append({
+                    "pid": f"P{i+1}", "at": arrival_times[i], "bt": burst_times[i], 
+                    "rt": burst_times[i], "ct": 0, "tat": 0, "wt": 0
+                })
+
+            # Sort primarily by arrival time
+            processes.sort(key=lambda x: x["at"])
+
+            current_time = 0
+            completed_count = 0
+            ready_queue = []
+            is_in_queue = [False] * n
+
+            # Initialize queue with the first arrived process(es)
+            if processes[0]["at"] > 0:
+                current_time = processes[0]["at"]
+
+            for i in range(n):
+                if processes[i]["at"] <= current_time:
+                    ready_queue.append(i)
+                    is_in_queue[i] = True
+
+            # Clear UI Table
+            for item in self.tree.get_children(): self.tree.delete(item)
+
+            # Process the Ready Queue
+            while completed_count < n:
+                if not ready_queue:
+                    current_time += 1
+                    # Check for new arrivals while idle
+                    for i in range(n):
+                        if processes[i]["at"] <= current_time and not is_in_queue[i] and processes[i]["rt"] > 0:
+                            ready_queue.append(i)
+                            is_in_queue[i] = True
+                    continue
+
+                # Pop the process at the front of the queue
+                idx = ready_queue.pop(0)
+                p = processes[idx]
+
+                # Execute for the time quantum or remaining time, whichever is smaller
+                execute_time = min(quantum, p["rt"])
+                p["rt"] -= execute_time
+                current_time += execute_time
+
+                # IMPORTANT: Check for newly arrived processes during this time slice FIRST
+                for i in range(n):
+                    if processes[i]["at"] <= current_time and not is_in_queue[i] and processes[i]["rt"] > 0:
+                        ready_queue.append(i)
+                        is_in_queue[i] = True
+
+                # Then, if the current process is still not finished, push it to the BACK of the queue
+                if p["rt"] > 0:
+                    ready_queue.append(idx)
+                else:
+                    # Process completed
+                    p["ct"] = current_time
+                    p["tat"] = p["ct"] - p["at"]
+                    p["wt"] = p["tat"] - p["bt"]
+                    completed_count += 1
+
+            # Render Data
+            total_tat = sum(p["tat"] for p in processes)
+            total_wt = sum(p["wt"] for p in processes)
+            
+            # Sort back by PID so the table looks clean
+            processes.sort(key=lambda x: int(x["pid"].replace("P", "")))
+
+            for p in processes:
+                self.tree.insert("", tk.END, values=(p["pid"], p["at"], p["bt"], p["ct"], p["tat"], p["wt"]))
+
+            self.lbl_averages.config(text=f"Average TAT: {(total_tat/n):.2f} ms  |  Average WT: {(total_wt/n):.2f} ms")
+
+        except ValueError:
+            messagebox.showerror("Input Error", "Please enter valid integers separated by commas.")
 
     def clear_inputs(self):
         self.entry_arrival.delete(0, tk.END)
