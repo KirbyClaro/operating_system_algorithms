@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sys
 import os
+import random
 
 class DiskManagementApp:
     def __init__(self, root):
@@ -72,7 +73,7 @@ class DiskManagementApp:
 
         # Center-aligned Header Title Text
         self.title_lbl = tk.Label(
-            self.header_frame, text="DISK SCHEDULING CONTROLLER", 
+            self.header_frame, text="DISK MANAGEMENT", 
             font=("Segoe UI", 16, "bold"), fg=self.colors["text_light"], bg=self.colors["bg_dark"]
         )
         self.title_lbl.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=(0, 100))
@@ -87,7 +88,7 @@ class DiskManagementApp:
 
         # Configuration UI Forms Grid Construction
         lbl_opts = {'font': ("Segoe UI", 9, "bold"), 'fg': self.colors["text_muted"], 'bg': self.colors["bg_card"]}
-        # Changed text color to dark and insert cursor to black for visibility
+        
         entry_opts = {'bg': self.colors["bg_card"], 'fg': self.colors["text_light"], 'bd': 1, 'relief': tk.SOLID, 'insertbackground': "black", 'font': ("Consolas", 11), 'justify': tk.CENTER}
 
         # Header Labels (Row 0)
@@ -117,14 +118,11 @@ class DiskManagementApp:
         self.dir_var = tk.StringVar(value="Left")
         self.dir_menu = ttk.Combobox(self.input_card, textvariable=self.dir_var, values=["Left", "Right"], state="readonly", width=8)
         self.dir_menu.grid(row=1, column=4, padx=15, pady=(0, 10))
-
-        # Core Calculation Execution Trigger
-        self.run_btn = tk.Button(
-            self.input_card, text="⚡ Compute Vectors", command=self.calculate_scheduling,
-            bg=self.colors["btn_blue"], fg="white", font=("Segoe UI", 10, "bold"),
-            bd=0, cursor="hand2", activebackground="#0284c7", activeforeground="white", padx=15, pady=4
-        )
-        self.run_btn.grid(row=1, column=5, padx=15, pady=(0, 10))
+        
+        
+        self.queue_entry = tk.Entry(self.input_card, width=32, **entry_opts)
+        self.queue_entry.insert(0, "98, 183, 37, 122, 14, 124, 65, 67")
+        self.queue_entry.grid(row=1, column=1, padx=15, pady=(0, 10))
 
         # 3. Canvas Screen Display Frame
         self.canvas_card = tk.Frame(self.root, bg=self.colors["bg_card"], highlightbackground="#e2e8f0", highlightthickness=1)
@@ -133,7 +131,7 @@ class DiskManagementApp:
         self.canvas = tk.Canvas(self.canvas_card, bg=self.colors["canvas_bg_start"], bd=0, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
 
-        # 4. Universal Navigation Footer Frame
+        # 4. Navigation Footer Frame
         self.footer_frame = tk.Frame(self.root, bg=self.colors["bg_dark"], height=60)
         self.footer_frame.pack(fill=tk.X, padx=20, pady=15)
 
@@ -156,6 +154,31 @@ class DiskManagementApp:
             font=("Consolas", 10), fg=self.colors["text_muted"], bg=self.colors["bg_dark"], justify=tk.CENTER
         )
         self.status_lbl.pack(fill=tk.X, side=tk.BOTTOM, pady=(0, 10))
+        
+        input_container = tk.Frame(self.input_card, bg=self.colors["bg_card"])
+        input_container.grid(row=1, column=1, padx=15, pady=(0, 10))
+
+        self.queue_entry = tk.Entry(input_container, width=28, **entry_opts)
+        self.queue_entry.insert(0, "98, 183, 37, 122, 14, 124, 65, 67")
+        self.queue_entry.pack(side=tk.LEFT, padx=(0, 5))
+        
+        #Random Button  
+        self.gen_btn = tk.Button(
+            input_container, text="🎲 Random", command=self.generate_random_queue,
+            bg=self.colors["accent_blue"], fg="white", font=("Segoe UI", 8, "bold"),
+            bd=0, cursor="hand2", padx=5
+        )
+        self.gen_btn.pack(side=tk.LEFT)
+        
+        input_container = tk.Frame(self.input_card, bg=self.colors["bg_card"])
+        input_container.grid(row=1, column=1, padx=15, pady=(0, 10))
+
+        self.run_btn = tk.Button(
+            self.input_card, text="⚡ Compute Vectors", command=self.calculate_scheduling,
+            bg=self.colors["btn_blue"], fg="white", font=("Segoe UI", 10, "bold"),
+            bd=0, cursor="hand2", activebackground="#0284c7", activeforeground="white", padx=15, pady=4
+        )
+        self.run_btn.grid(row=1, column=5, padx=15, pady=(0, 10))
 
     def draw_gradient_background(self, width, height):
         self.canvas.delete("gradient")
@@ -206,6 +229,17 @@ class DiskManagementApp:
             self.auto_job = self.root.after(800, self.run_auto_loop)
         else:
             self.pause_auto_play()
+            
+    def generate_random_queue(self):
+        """Generates a random list of track requests based on max boundary."""
+        try:
+            max_val = int(self.size_entry.get())
+            # Generate 8 random tracks between 0 and max_val
+            random_list = [str(random.randint(0, max_val - 1)) for _ in range(8)]
+            self.queue_entry.delete(0, tk.END)
+            self.queue_entry.insert(0, ", ".join(random_list))
+        except ValueError:
+            messagebox.showerror("Input Error", "Please ensure 'Max Boundary' is a valid number.")
 
     def calculate_scheduling(self):
         self.pause_auto_play()
@@ -225,6 +259,7 @@ class DiskManagementApp:
         self.seek_sequence = [head]
         self.total_seek_time = 0
 
+        #FCFS Scheduling Algorithm
         if algo == "FCFS":
             self.seek_sequence.extend(req_queue)
         elif algo == "SSTF":
@@ -279,7 +314,7 @@ class DiskManagementApp:
             self.total_seek_time += abs(self.seek_sequence[i+1] - self.seek_sequence[i])
 
         self.current_step = 0
-        self.update_navigation_buttons()
+        self.navigation_buttons()
         self.draw_chart(disk_size)
 
     def draw_chart(self, disk_size):
@@ -329,7 +364,7 @@ class DiskManagementApp:
         if self.current_step < len(self.seek_sequence) - 1:
             self.current_step += 1
             self.draw_chart(int(self.size_entry.get()))
-            self.update_navigation_buttons()
+            self.navigation_buttons()
         else:
             self.pause_auto_play()
 
@@ -337,9 +372,9 @@ class DiskManagementApp:
         if self.current_step > 0:
             self.current_step -= 1
             self.draw_chart(int(self.size_entry.get()))
-            self.update_navigation_buttons()
+            self.navigation_buttons()
 
-    def update_navigation_buttons(self):
+    def navigation_buttons(self):
         total_len = len(self.seek_sequence)
         
         # Back Actions State Triggers
