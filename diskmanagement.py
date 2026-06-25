@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import sys
 import os
 
-class ModernDiskSchedulingApp:
+class DiskManagementApp:
     def __init__(self, root):
         self.root = root
         self.root.title("OS Architecture & Algorithms: Disk Management")
@@ -368,6 +368,6 @@ class ModernDiskSchedulingApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ModernDiskSchedulingApp(root)
+    app = DiskManagementApp(root)
     root.bind("<Configure>", lambda e: app.draw_chart(int(app.size_entry.get())) if app.seek_sequence else None)
     root.mainloop()
