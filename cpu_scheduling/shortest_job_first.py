@@ -5,7 +5,7 @@ class SJFSimulator:
     def __init__(self, root):
         self.root = root
         self.root.title("Shortest Job First (SJF) Scheduling")
-        self.root.geometry("650x600")
+        self.root.geometry("750x650")
         self.root.configure(bg="#f4f4f9")
 
         style = ttk.Style()
@@ -42,9 +42,10 @@ class SJFSimulator:
         btn_frame = tk.Frame(main_frame, bg="#f4f4f9")
         btn_frame.pack(pady=10)
 
-        ttk.Button(btn_frame, text="Run Simulation", command=self.calculate_sjf).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="Clear", command=self.clear_inputs).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="⬅ Back", command=self.root.destroy).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="Run Simulation", command=self.calculate_sjf).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="View Gantt Chart", command=self.show_gantt_chart).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Clear", command=self.clear_inputs).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="⬅ Back", command=self.root.destroy).pack(side=tk.LEFT, padx=5)
 
         # --- Results Table ---
         columns = ("PID", "AT", "BT", "CT", "TAT", "WT")
@@ -59,6 +60,9 @@ class SJFSimulator:
         self.lbl_averages = tk.Label(main_frame, text="Average TAT: 0.00 ms  |  Average WT: 0.00 ms", font=("Segoe UI", 11, "bold"), bg="#f4f4f9")
         self.lbl_averages.pack(pady=10)
 
+        # Timeline structure to hold burst intervals
+        self.timeline = []
+
     def calculate_sjf(self):
         try:
             arrival_times = list(map(int, self.entry_arrival.get().split(',')))
@@ -70,8 +74,6 @@ class SJFSimulator:
                 return
 
             mode = self.mode_var.get()
-            
-            # Setup process dictionary
             processes = []
             for i in range(n):
                 processes.append({
@@ -81,25 +83,29 @@ class SJFSimulator:
 
             current_time = 0
             completed_count = 0
+            self.timeline = []
             
-            # Clear table
             for item in self.tree.get_children(): self.tree.delete(item)
 
             if mode == "Non-Preemptive":
                 while completed_count < n:
-                    # Find available processes that have arrived and are not completed
                     available = [p for p in processes if p["at"] <= current_time and not p["completed"]]
                     
                     if not available:
-                        current_time += 1 # CPU is idle, advance time
+                        if not self.timeline or self.timeline[-1]["pid"] != "Idle":
+                            self.timeline.append({"pid": "Idle", "start": current_time, "end": current_time + 1})
+                        else:
+                            self.timeline[-1]["end"] += 1
+                        current_time += 1 
                         continue
                     
-                    # Sort available by Burst Time (the core SJF rule)
-                    available.sort(key=lambda x: x["bt"])
+                    available.sort(key=lambda x: (x["bt"], x["at"]))
                     current_process = available[0]
                     
-                    # Execute process to completion
+                    start_time = current_time
                     current_time += current_process["bt"]
+                    self.timeline.append({"pid": current_process["pid"], "start": start_time, "end": current_time})
+
                     current_process["ct"] = current_time
                     current_process["tat"] = current_process["ct"] - current_process["at"]
                     current_process["wt"] = current_process["tat"] - current_process["bt"]
@@ -108,29 +114,33 @@ class SJFSimulator:
 
             elif mode == "Preemptive":
                 while completed_count < n:
-                    # Find available processes that have arrived and have remaining time > 0
                     available = [p for p in processes if p["at"] <= current_time and p["rt"] > 0]
                     
                     if not available:
-                        current_time += 1 # CPU is idle, advance time
+                        if not self.timeline or self.timeline[-1]["pid"] != "Idle":
+                            self.timeline.append({"pid": "Idle", "start": current_time, "end": current_time + 1})
+                        else:
+                            self.timeline[-1]["end"] += 1
+                        current_time += 1
                         continue
                     
-                    # Sort by Remaining Time (SRTF rule)
-                    available.sort(key=lambda x: x["rt"])
+                    available.sort(key=lambda x: (x["rt"], x["at"]))
                     current_process = available[0]
                     
-                    # Execute for 1 unit of time
+                    if not self.timeline or self.timeline[-1]["pid"] != current_process["pid"]:
+                        self.timeline.append({"pid": current_process["pid"], "start": current_time, "end": current_time + 1})
+                    else:
+                        self.timeline[-1]["end"] += 1
+
                     current_process["rt"] -= 1
                     current_time += 1
                     
-                    # If process finishes
                     if current_process["rt"] == 0:
                         current_process["ct"] = current_time
                         current_process["tat"] = current_process["ct"] - current_process["at"]
                         current_process["wt"] = current_process["tat"] - current_process["bt"]
                         completed_count += 1
 
-            # Render Table and Averages
             total_tat = sum(p["tat"] for p in processes)
             total_wt = sum(p["wt"] for p in processes)
             
@@ -142,9 +152,57 @@ class SJFSimulator:
         except ValueError:
             messagebox.showerror("Input Error", "Please enter valid integers separated by commas.")
 
+    def show_gantt_chart(self):
+        if not self.timeline:
+            messagebox.showwarning("No Data", "Please run the simulation first.")
+            return
+
+        gantt_win = tk.Toplevel(self.root)
+        gantt_win.title(f"Gantt Chart - {self.mode_var.get()} SJF")
+        gantt_win.geometry("800x250")
+        gantt_win.configure(bg="white")
+
+        tk.Label(gantt_win, text=f"Execution Timeline ({self.mode_var.get()})", font=("Segoe UI", 14, "bold"), bg="white").pack(pady=10)
+
+        canvas_width = 720
+        canvas_height = 100
+        canvas = tk.Canvas(gantt_win, width=canvas_width, height=canvas_height, bg="white", highlightthickness=0)
+        canvas.pack(pady=20)
+
+        total_time = self.timeline[-1]["end"]
+        if total_time == 0: return
+
+        x_offset = 20
+        usable_width = canvas_width - 40
+        colors = ["#FF9999", "#99CCFF", "#99FF99", "#FFCC99", "#CC99FF", "#FFFF99"]
+        process_colors = {"Idle": "#E0E0E0"}
+
+        for block in self.timeline:
+            pid = block["pid"]
+            start = block["start"]
+            end = block["end"]
+            duration = end - start
+            
+            if pid not in process_colors:
+                process_colors[pid] = colors[len(process_colors) % len(colors)]
+
+            block_width = (duration / total_time) * usable_width
+            
+            canvas.create_rectangle(x_offset, 20, x_offset + block_width, 70, fill=process_colors[pid], outline="black")
+            
+            if block_width > 20:
+                text_x = x_offset + (block_width / 2)
+                canvas.create_text(text_x, 45, text=pid, font=("Segoe UI", 10, "bold"))
+
+            canvas.create_text(x_offset, 85, text=str(start), font=("Segoe UI", 9))
+            x_offset += block_width
+
+        canvas.create_text(x_offset, 85, text=str(total_time), font=("Segoe UI", 9))
+
     def clear_inputs(self):
         self.entry_arrival.delete(0, tk.END)
         self.entry_burst.delete(0, tk.END)
+        self.timeline = []
         for item in self.tree.get_children(): self.tree.delete(item)
         self.lbl_averages.config(text="Average TAT: 0.00 ms  |  Average WT: 0.00 ms")
 
